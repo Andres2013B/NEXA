@@ -5,9 +5,8 @@ solicitud al modelo de IA más apropiado — priorizando proveedores
 **gratuitos** (Google/Gemini, Groq, OpenRouter) y dejando OpenAI/ChatGPT y
 Anthropic/Claude (de pago) como último recurso si están configurados — con
 respaldo automático entre proveedores si uno falla o no tiene clave
-configurada. También puede generar imágenes a partir de una descripción
-(requiere clave de OpenAI con crédito, no hay generación de imágenes
-gratuita en ningún proveedor soportado).
+configurada. También puede generar imágenes gratis (sin clave) usando
+Pollinations.ai, con OpenAI como respaldo opcional si está configurado.
 
 ## Cómo funciona
 
@@ -24,21 +23,18 @@ gratuita en ningún proveedor soportado).
   intenta el primer proveedor disponible de la cadena y hace *streaming* de
   la respuesta; si el proveedor falla (sin clave, error de red, error de la
   API) pasa automáticamente al siguiente de la cadena.
-- **`src/app/api/image/route.ts`** — genera imágenes con el modelo de
-  imágenes de OpenAI.
+- **`src/app/api/image/route.ts`** — genera imágenes con Pollinations.ai
+  (gratis, sin API key); si falla, cae a OpenAI (`OPENAI_IMAGE_MODEL`) solo
+  si está configurado.
 - **`src/app/page.tsx`** + `src/components/*` — landing con asistente
-  flotante (`FloatingAIButton` + `AIChatPanel`): selector de modo (Automático
-  / Gemini / Groq / OpenRouter / ChatGPT / Claude forzado, con los
-  proveedores sin clave bloqueados con 🔒), indicador de qué modelo
+  flotante (`FloatingAIButton` + `AIChatPanel`): indicador de qué modelo
   respondió cada mensaje, botón para adjuntar archivos de texto plano como
   contexto y botón para cambiar a modo generación de imágenes.
-- **`src/app/api/providers/route.ts`** — expone qué proveedores tienen clave
-  configurada (solo booleanos, nunca las claves) para que el selector de
-  modelo bloquee los que van a fallar.
 
-El usuario nunca necesita elegir el modelo manualmente: el modo
-"Automático" es el predeterminado. Forzar un proveedor sigue respetando la
-cadena de respaldo (si el forzado falla, se intenta con los demás).
+El usuario **no elige el modelo**: NEXA siempre enruta en modo automático
+según la categoría detectada, sin selector en la interfaz. Si querés forzar
+un proveedor puntual, el backend (`route()` en `router.ts`, parámetro `mode`
+de `/api/chat`) sigue soportándolo — solo no está expuesto en la UI.
 
 ## Requisitos
 
@@ -107,10 +103,11 @@ desplegar.
   búsqueda en internet en vivo — el enrutador está preparado para
   incorporar esas herramientas como pasos adicionales del pipeline
   (`src/lib/nexa/router.ts` y las rutas `api/*`) sin cambiar la interfaz.
-- La generación de imágenes usa el modelo de imágenes de OpenAI
-  (`OPENAI_IMAGE_MODEL`); para usar otro proveedor de imágenes, añade su
-  cliente en `src/lib/nexa/models.ts` y una rama en
-  `src/app/api/image/route.ts`.
+- La generación de imágenes con Pollinations.ai no se pudo probar en este
+  entorno (el sandbox de desarrollo bloquea la salida a
+  `image.pollinations.ai`); revisá `src/app/api/image/route.ts` si el
+  formato de respuesta cambia. Para sumar otro proveedor de imágenes, seguí
+  el mismo patrón (`generateWithX` + intento en orden dentro de `POST`).
 - Los IDs de modelo por defecto de Groq y OpenRouter (`GROQ_MODEL_*`,
   `OPENROUTER_MODEL_*` en `.env.example`) no se pudieron probar en este
   entorno por no tener clave propia de esos proveedores — verificalos contra

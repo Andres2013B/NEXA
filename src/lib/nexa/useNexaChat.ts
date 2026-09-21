@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { ChatMessage, ModelMode } from "./chat-types";
+import type { ChatMessage } from "./chat-types";
 import type { ProviderId } from "./models";
 
 function id() {
@@ -10,7 +10,6 @@ function id() {
 
 export function useNexaChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [mode, setMode] = useState<ModelMode>("auto");
   const [isLoading, setIsLoading] = useState(false);
 
   async function runChat(history: ChatMessage[], text: string) {
@@ -26,7 +25,7 @@ export function useNexaChat() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          mode,
+          mode: "auto",
           messages: withUser.map((m) => ({ role: m.role, content: m.content })),
         }),
       });
@@ -122,7 +121,7 @@ export function useNexaChat() {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
-            ? { ...m, content: "", image: data.image, provider: "openai" }
+            ? { ...m, content: "", image: data.image, provider: data.provider ?? "pollinations" }
             : m,
         ),
       );
@@ -156,5 +155,5 @@ export function useNexaChat() {
     else void runChat(base, prevUser.content);
   }
 
-  return { messages, mode, setMode, isLoading, send, retry };
+  return { messages, isLoading, send, retry };
 }

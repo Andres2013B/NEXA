@@ -15,7 +15,7 @@ const SUGGESTIONS = [
 export default function Home() {
   const [open, setOpen] = useState(false);
   const [isImageMode, setIsImageMode] = useState(false);
-  const { messages, mode, setMode, isLoading, send, retry } = useNexaChat();
+  const { messages, isLoading, send, retry } = useNexaChat();
 
   function openWith(text?: string) {
     setOpen(true);
@@ -75,8 +75,6 @@ export default function Home() {
         open={open}
         onClose={() => setOpen(false)}
         messages={messages}
-        mode={mode}
-        onModeChange={setMode}
         isLoading={isLoading}
         isImageMode={isImageMode}
         onToggleImageMode={() => setIsImageMode((v) => !v)}
