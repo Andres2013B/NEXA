@@ -42,15 +42,20 @@ export default function Home() {
 
       if (!res.ok || !res.body) {
         const data = await res.json().catch(() => ({}));
+        const details = Array.isArray(data.details) ? data.details.join(" ") : undefined;
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantId
               ? {
                   ...m,
                   error: true,
-                  content:
+                  content: [
                     data.error ??
-                    "No se pudo obtener respuesta. Verifica la configuración de las claves de API.",
+                      "No se pudo obtener respuesta. Verifica la configuración de las claves de API.",
+                    details,
+                  ]
+                    .filter(Boolean)
+                    .join("\n"),
                 }
               : m,
           ),

@@ -110,9 +110,9 @@ export async function POST(req: Request) {
         },
       });
     } catch (err) {
-      errors.push(
-        `${providerLabel(provider)}: ${err instanceof Error ? err.message : "error desconocido"}.`,
-      );
+      const message = err instanceof Error ? err.message : "error desconocido";
+      console.error(`[nexa/chat] ${provider} falló:`, err);
+      errors.push(`${providerLabel(provider)}: ${message}.`);
     }
   }
 
