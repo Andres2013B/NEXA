@@ -1,15 +1,6 @@
 import type { ChatMessage, ImageProvider } from "@/lib/nexa/chat-types";
 import { providerLabel, type ProviderId } from "@/lib/nexa/models";
 
-const PROVIDER_STYLES: Record<ImageProvider, string> = {
-  openai: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-  anthropic: "bg-orange-500/15 text-orange-700 dark:text-orange-300",
-  google: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
-  groq: "bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300",
-  openrouter: "bg-teal-500/15 text-teal-700 dark:text-teal-300",
-  pollinations: "bg-pink-500/15 text-pink-700 dark:text-pink-300",
-};
-
 function providerBadgeLabel(provider: ImageProvider): string {
   return provider === "pollinations" ? "Pollinations (gratis)" : providerLabel(provider as ProviderId);
 }
@@ -34,30 +25,16 @@ export function AIMessage({
               : "bg-white text-neutral-900 ring-1 ring-neutral-100 dark:bg-neutral-800/80 dark:text-neutral-100 dark:ring-neutral-700/50"
         }`}
       >
-        {!isUser && message.sources && message.sources.length > 1 && (
-          <div className="mb-1.5 flex flex-wrap items-center gap-1">
-            <span
-              className="inline-flex items-center gap-1 rounded-full bg-violet-500/15 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300"
-              title="NEXA combinó las respuestas de estos modelos en una sola"
-            >
-              ✦ Combinado
-            </span>
-            {message.sources.map((s) => (
-              <span
-                key={s}
-                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${PROVIDER_STYLES[s]}`}
-              >
-                {providerLabel(s)}
-              </span>
-            ))}
-          </div>
-        )}
-        {!isUser && message.provider && (!message.sources || message.sources.length <= 1) && (
+        {!isUser && message.provider && (
           <span
-            className={`mb-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${PROVIDER_STYLES[message.provider]}`}
-            title={message.model}
+            className="mb-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 text-[10px] text-white"
+            title={
+              message.sources && message.sources.length > 1
+                ? `Combinado: ${message.sources.map((s) => providerLabel(s)).join(", ")}`
+                : providerBadgeLabel(message.provider)
+            }
           >
-            {providerBadgeLabel(message.provider)}
+            ✦
           </span>
         )}
 
