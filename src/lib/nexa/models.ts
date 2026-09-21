@@ -44,13 +44,14 @@ const MODEL_IDS: Record<ProviderId, Record<Tier, string>> = {
     advanced: process.env.GOOGLE_MODEL_ADVANCED ?? "gemini-flash-lite-latest",
   },
   groq: {
-    // Modelos abiertos gratuitos de Groq (cuota generosa, inferencia muy
-    // rápida). Sin clave propia no pude probarlos en este entorno — si
-    // Groq retira/renombra alguno, ajustá las variables de entorno igual
-    // que se hizo acá arriba con los de Google.
-    fast: process.env.GROQ_MODEL_FAST ?? "llama-3.1-8b-instant",
-    general: process.env.GROQ_MODEL_GENERAL ?? "llama-3.3-70b-versatile",
-    advanced: process.env.GROQ_MODEL_ADVANCED ?? "llama-3.3-70b-versatile",
+    // llama-3.1-8b-instant y llama-3.3-70b-versatile pasaron a ser
+    // "Enterprise" en el catálogo de Groq (solo "Contact Sales", sin acceso
+    // self-service) — devuelven 404 model_not_found en una cuenta normal.
+    // Los modelos GPT-OSS sí están disponibles en cuenta estándar
+    // (console.groq.com/docs/models, tabla "Production Models").
+    fast: process.env.GROQ_MODEL_FAST ?? "openai/gpt-oss-20b",
+    general: process.env.GROQ_MODEL_GENERAL ?? "openai/gpt-oss-120b",
+    advanced: process.env.GROQ_MODEL_ADVANCED ?? "openai/gpt-oss-120b",
   },
   openrouter: {
     // Modelos con sufijo ":free" para quedarse dentro del tier gratuito de
