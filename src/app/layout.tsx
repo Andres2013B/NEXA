@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -16,6 +16,16 @@ export const metadata: Metadata = {
   title: "NEXA — IA multimodelo",
   description:
     "Asistente personal, académico, creativo y productivo que combina ChatGPT, Claude y Gemini.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  // Sin esto, Safari en iOS no achica el viewport cuando aparece el
+  // teclado — el layout fijo a 100dvh queda con contenido tapado o
+  // cortado detrás del teclado. Con "resizes-content" el layout se
+  // recalcula igual que en Chrome/Android.
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

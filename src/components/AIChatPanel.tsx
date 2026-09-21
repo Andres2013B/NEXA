@@ -39,6 +39,13 @@ export function AIChatPanel({
   onRetry,
 }: AIChatPanelProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Respaldo para Safari/iOS: cuando aparece el teclado en pantalla, el
+  // viewport visual se achica pero la altura fija (100dvh) no siempre lo
+  // sigue a tiempo, dejando el input tapado o la pantalla "cortada". Fijar
+  // la altura al alto real del visualViewport corrige eso en cualquier
+  // versión, aunque interactive-widget del <meta viewport> ya lo resuelva
+  // en Safari moderno.
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -52,6 +59,22 @@ export function AIChatPanel({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, sidebarOpen, onClose]);
 
+  useEffect(() => {
+    if (!open) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    function update() {
+      setViewportHeight(vv!.height);
+    }
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    };
+  }, [open]);
+
   if (!open) return null;
 
   return (
@@ -59,6 +82,7 @@ export function AIChatPanel({
       role="dialog"
       aria-modal="true"
       aria-label="Asistente NEXA"
+      style={viewportHeight ? { height: viewportHeight } : undefined}
       className="fixed inset-0 z-50 flex animate-[fadeInUp_0.2s_ease-out] bg-white dark:bg-neutral-900"
     >
       {/* Sidebar: fija en desktop, drawer superpuesto en mobile */}
