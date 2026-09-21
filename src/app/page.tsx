@@ -4,6 +4,7 @@ import { useState } from "react";
 import { FloatingAIButton } from "@/components/FloatingAIButton";
 import { AIChatPanel } from "@/components/AIChatPanel";
 import { useNexaChat } from "@/lib/nexa/useNexaChat";
+import type { Attachment } from "@/lib/nexa/chat-types";
 
 const SUGGESTIONS = [
   "Escribe un correo profesional",
@@ -15,7 +16,17 @@ const SUGGESTIONS = [
 export default function Home() {
   const [open, setOpen] = useState(false);
   const [isImageMode, setIsImageMode] = useState(false);
-  const { messages, isLoading, send, retry } = useNexaChat();
+  const {
+    conversations,
+    activeId,
+    messages,
+    isLoading,
+    send,
+    retry,
+    newConversation,
+    selectConversation,
+    deleteConversation,
+  } = useNexaChat();
 
   function openWith(text?: string) {
     setOpen(true);
@@ -66,19 +77,26 @@ export default function Home() {
         </div>
       </main>
 
-      <FloatingAIButton
-        open={open}
-        onClick={() => setOpen((v) => !v)}
-        messageCount={messages.length}
-      />
+      {!open && (
+        <FloatingAIButton
+          open={open}
+          onClick={() => setOpen(true)}
+          messageCount={messages.length}
+        />
+      )}
       <AIChatPanel
         open={open}
         onClose={() => setOpen(false)}
+        conversations={conversations}
+        activeId={activeId}
+        onSelectConversation={selectConversation}
+        onNewConversation={newConversation}
+        onDeleteConversation={deleteConversation}
         messages={messages}
         isLoading={isLoading}
         isImageMode={isImageMode}
         onToggleImageMode={() => setIsImageMode((v) => !v)}
-        onSend={(text) => send(text, isImageMode)}
+        onSend={(text, attachments: Attachment[]) => send(text, isImageMode, attachments)}
         onRetry={retry}
       />
     </div>

@@ -43,6 +43,20 @@ export function AIMessage({
           </span>
         )}
 
+        {message.attachments && message.attachments.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {message.attachments.map((a, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={`${a.name}-${i}`}
+                src={`data:${a.mediaType};base64,${a.data}`}
+                alt={a.name}
+                className="h-24 w-24 rounded-lg object-cover ring-1 ring-white/30"
+              />
+            ))}
+          </div>
+        )}
+
         {message.image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={message.image} alt="Imagen generada" className="max-w-full rounded-lg" />

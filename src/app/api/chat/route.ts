@@ -60,10 +60,15 @@ export async function POST(req: Request) {
 
   const lastUserMessage =
     [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
+  // El contenido puede venir como array (texto + imágenes adjuntas); para
+  // clasificar la categoría solo nos importa la parte de texto.
   const lastUserText =
     typeof lastUserMessage === "string"
       ? lastUserMessage
-      : JSON.stringify(lastUserMessage);
+      : lastUserMessage
+          .filter((part): part is Extract<typeof part, { type: "text" }> => part.type === "text")
+          .map((part) => part.text)
+          .join(" ");
 
   const decision = route(lastUserText, mode);
 

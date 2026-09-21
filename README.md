@@ -27,9 +27,14 @@ Pollinations.ai, con OpenAI como respaldo opcional si está configurado.
   (gratis, sin API key); si falla, cae a OpenAI (`OPENAI_IMAGE_MODEL`) solo
   si está configurado.
 - **`src/app/page.tsx`** + `src/components/*` — landing con asistente
-  flotante (`FloatingAIButton` + `AIChatPanel`): indicador de qué modelo
-  respondió cada mensaje, botón para adjuntar archivos de texto plano como
-  contexto y botón para cambiar a modo generación de imágenes.
+  flotante (`FloatingAIButton`); al abrirlo, `AIChatPanel` ocupa toda la
+  pantalla con un sidebar de conversaciones (`ConversationSidebar`, fijo en
+  desktop, drawer en mobile) — indicador de qué modelo respondió cada
+  mensaje, botón para adjuntar imágenes o archivos de texto como contexto y
+  botón para cambiar a modo generación de imágenes.
+- **`src/lib/nexa/useNexaChat.ts`** — hook que maneja múltiples
+  conversaciones (persistidas en `localStorage` del navegador, sin backend),
+  streaming, reintentos y el envío de adjuntos multimodales.
 
 El usuario **no elige el modelo**: NEXA siempre enruta en modo automático
 según la categoría detectada, sin selector en la interfaz. Si querés forzar
@@ -97,8 +102,14 @@ desplegar.
 
 ## Limitaciones conocidas / próximos pasos
 
-- El adjuntar archivos solo lee texto plano en el navegador (`.txt`, `.md`,
-  `.csv`, `.json`, código fuente); no incluye un parser de PDF/DOCX/XLSX.
+- El historial de conversaciones vive en `localStorage` del navegador — no
+  hay cuenta de usuario ni sincronización entre dispositivos; borrar datos
+  del sitio borra el historial. Migrar a una base de datos real (con auth)
+  es el paso natural si esto crece.
+- Adjuntar archivos soporta imágenes (`image/*`, hasta 4MB por archivo,
+  enviadas al modelo como contexto visual) y texto plano (`.txt`, `.md`,
+  `.csv`, `.json`, código fuente, insertado como texto en el mensaje); no
+  incluye un parser de PDF/DOCX/XLSX.
 - No incluye todavía autenticación, base de datos, memoria persistente ni
   búsqueda en internet en vivo — el enrutador está preparado para
   incorporar esas herramientas como pasos adicionales del pipeline
