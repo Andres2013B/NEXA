@@ -25,13 +25,32 @@ interface ChatRequestBody {
  */
 async function attempt(provider: ProviderId, tier: ReturnType<typeof route>["tier"], messages: ModelMessage[]) {
   const model = resolveModel(provider, tier);
+  let streamError: unknown;
   const result = streamText({
     model,
     system: NEXA_SYSTEM_PROMPT,
     messages,
+    // Los modelos "latest" de Gemini piensan antes de responder por defecto,
+    // lo que puede superar el límite de 10s de las funciones serverless en
+    // el plan Hobby de Vercel y dejar la respuesta vacía sin error visible.
+    providerOptions:
+      provider === "google"
+        ? { google: { thinkingConfig: { thinkingBudget: 0 } } }
+        : undefined,
+    // Cuando falla la llamada al proveedor (ej. 503 "high demand") antes de
+    // emitir contenido, textStream termina vacío en vez de rechazar la
+    // promesa de lectura; capturamos el error acá para poder detectarlo y
+    // pasar al siguiente proveedor de la cadena en vez de responder 200 con
+    // el cuerpo vacío.
+    onError: ({ error }) => {
+      streamError = error;
+    },
   });
   const reader = result.textStream.getReader();
   const first = await reader.read();
+  if (first.done && !first.value && streamError) {
+    throw streamError;
+  }
   return { reader, first };
 }
 
