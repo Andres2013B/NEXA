@@ -31,9 +31,13 @@ const MODEL_IDS: Record<ProviderId, Record<Tier, string>> = {
     advanced: process.env.ANTHROPIC_MODEL_ADVANCED ?? "claude-opus-4-1",
   },
   google: {
+    // flash-latest y pro-latest devuelven 503 "high demand" / 429 "quota
+    // exceeded" con bastante frecuencia en el tier gratuito; flash-lite es
+    // el que responde de forma consistente, así que es el default más
+    // confiable mientras solo haya un proveedor configurado.
     fast: process.env.GOOGLE_MODEL_FAST ?? "gemini-flash-lite-latest",
-    general: process.env.GOOGLE_MODEL_GENERAL ?? "gemini-flash-latest",
-    advanced: process.env.GOOGLE_MODEL_ADVANCED ?? "gemini-pro-latest",
+    general: process.env.GOOGLE_MODEL_GENERAL ?? "gemini-flash-lite-latest",
+    advanced: process.env.GOOGLE_MODEL_ADVANCED ?? "gemini-flash-lite-latest",
   },
 };
 

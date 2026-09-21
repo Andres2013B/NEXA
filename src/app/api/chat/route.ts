@@ -30,13 +30,6 @@ async function attempt(provider: ProviderId, tier: ReturnType<typeof route>["tie
     model,
     system: NEXA_SYSTEM_PROMPT,
     messages,
-    // Los modelos "latest" de Gemini piensan antes de responder por defecto,
-    // lo que puede superar el límite de 10s de las funciones serverless en
-    // el plan Hobby de Vercel y dejar la respuesta vacía sin error visible.
-    providerOptions:
-      provider === "google"
-        ? { google: { thinkingConfig: { thinkingBudget: 0 } } }
-        : undefined,
     // Cuando falla la llamada al proveedor (ej. 503 "high demand") antes de
     // emitir contenido, textStream termina vacío en vez de rechazar la
     // promesa de lectura; capturamos el error acá para poder detectarlo y
