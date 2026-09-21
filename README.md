@@ -19,10 +19,12 @@ Pollinations.ai, con OpenAI como respaldo opcional si está configurado.
   preferencia para esa categoría.
 - **`src/lib/nexa/models.ts`** — catálogo de modelos por proveedor y nivel,
   configurable por variables de entorno.
-- **`src/app/api/chat/route.ts`** — recibe la conversación, decide la ruta,
-  intenta el primer proveedor disponible de la cadena y hace *streaming* de
-  la respuesta; si el proveedor falla (sin clave, error de red, error de la
-  API) pasa automáticamente al siguiente de la cadena.
+- **`src/app/api/chat/route.ts`** — recibe la conversación y decide la ruta.
+  Con **un solo** proveedor configurado, intenta ese y hace *streaming*
+  directo (con respaldo si falla). Con **dos o más**, en modo automático
+  les pregunta lo mismo a todos en paralelo y usa el de mayor prioridad
+  disponible para sintetizar una sola respuesta final a partir de todas
+  (ver "Modo consultar a todos" más abajo).
 - **`src/app/api/image/route.ts`** — genera imágenes con Pollinations.ai
   (gratis, sin API key); si falla, cae a OpenAI (`OPENAI_IMAGE_MODEL`) solo
   si está configurado.
@@ -39,7 +41,33 @@ Pollinations.ai, con OpenAI como respaldo opcional si está configurado.
 El usuario **no elige el modelo**: NEXA siempre enruta en modo automático
 según la categoría detectada, sin selector en la interfaz. Si querés forzar
 un proveedor puntual, el backend (`route()` en `router.ts`, parámetro `mode`
-de `/api/chat`) sigue soportándolo — solo no está expuesto en la UI.
+de `/api/chat`) sigue soportándolo — solo no está expuesto en la UI (forzar
+un proveedor se lo pregunta solo a ese, nunca activa el modo ensemble).
+
+### Modo "consultar a todos"
+
+Con dos o más proveedores configurados, cada mensaje en modo automático:
+
+1. Le pregunta lo mismo a **todos** los proveedores configurados en
+   paralelo (`generateText`, no streaming, con un timeout de 7s por
+   proveedor para no colgar la función entera).
+2. El proveedor de mayor prioridad que haya respondido a tiempo toma todas
+   las respuestas y arma **una sola respuesta final**, combinando lo mejor
+   de cada una — esa síntesis sí se transmite en *streaming* al usuario.
+3. Si algún proveedor falla o tarda de más, se lo ignora y se sintetiza
+   igual con los que sí respondieron. Si solo uno respondió, se manda tal
+   cual (no hay nada que sintetizar). Si la síntesis en sí falla, cae a
+   mandar la respuesta cruda del proveedor de mayor prioridad en vez de dar
+   error.
+
+**Advertencia real sobre el plan Hobby de Vercel**: las funciones
+serverless ahí tienen un límite duro de 10s sin importar `maxDuration` en
+el código. Consultar a 2+ proveedores en paralelo y encima sintetizar
+puede superar ese límite fácilmente, sobre todo a medida que sumes más
+proveedores configurados. No lo pude probar con 2+ proveedores reales en
+este entorno (el sandbox de desarrollo solo tiene salida a la API de
+Google) — si en producción empieza a cortarse seguido, hay que evaluar
+subir a un plan con más tiempo de ejecución.
 
 ## Requisitos
 
