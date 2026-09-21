@@ -8,8 +8,10 @@ export const runtime = "nodejs";
  */
 export async function GET() {
   return Response.json({
+    google: isProviderConfigured("google"),
+    groq: isProviderConfigured("groq"),
+    openrouter: isProviderConfigured("openrouter"),
     openai: isProviderConfigured("openai"),
     anthropic: isProviderConfigured("anthropic"),
-    google: isProviderConfigured("google"),
   });
 }

@@ -1,10 +1,13 @@
 # NEXA — IA multimodelo
 
 NEXA es un asistente conversacional que enruta automáticamente cada
-solicitud al modelo de IA más apropiado (OpenAI/ChatGPT, Anthropic/Claude o
-Google/Gemini) según el tipo de tarea, con respaldo automático entre
-proveedores si uno falla o no tiene clave configurada. También puede generar
-imágenes a partir de una descripción.
+solicitud al modelo de IA más apropiado — priorizando proveedores
+**gratuitos** (Google/Gemini, Groq, OpenRouter) y dejando OpenAI/ChatGPT y
+Anthropic/Claude (de pago) como último recurso si están configurados — con
+respaldo automático entre proveedores si uno falla o no tiene clave
+configurada. También puede generar imágenes a partir de una descripción
+(requiere clave de OpenAI con crédito, no hay generación de imágenes
+gratuita en ningún proveedor soportado).
 
 ## Cómo funciona
 
@@ -23,11 +26,15 @@ imágenes a partir de una descripción.
   API) pasa automáticamente al siguiente de la cadena.
 - **`src/app/api/image/route.ts`** — genera imágenes con el modelo de
   imágenes de OpenAI.
-- **`src/app/page.tsx`** + `src/components/*` — interfaz de chat con
-  selector de modo (Automático / ChatGPT / Claude / Gemini forzado),
-  indicador de qué modelo respondió cada mensaje, botón para adjuntar
-  archivos de texto plano como contexto y botón para cambiar a modo
-  generación de imágenes.
+- **`src/app/page.tsx`** + `src/components/*` — landing con asistente
+  flotante (`FloatingAIButton` + `AIChatPanel`): selector de modo (Automático
+  / Gemini / Groq / OpenRouter / ChatGPT / Claude forzado, con los
+  proveedores sin clave bloqueados con 🔒), indicador de qué modelo
+  respondió cada mensaje, botón para adjuntar archivos de texto plano como
+  contexto y botón para cambiar a modo generación de imágenes.
+- **`src/app/api/providers/route.ts`** — expone qué proveedores tienen clave
+  configurada (solo booleanos, nunca las claves) para que el selector de
+  modelo bloquee los que van a fallar.
 
 El usuario nunca necesita elegir el modelo manualmente: el modo
 "Automático" es el predeterminado. Forzar un proveedor sigue respetando la
@@ -36,9 +43,16 @@ cadena de respaldo (si el forzado falla, se intenta con los demás).
 ## Requisitos
 
 - Node.js 20+
-- Al menos una clave de API de OpenAI, Anthropic o Google. Con las tres
-  configuradas, NEXA puede aprovechar todo el sistema de enrutamiento y
-  respaldo descrito arriba.
+- Al menos una clave de API. Recomendado para no pagar nada:
+  - **Google Gemini** — [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
+  - **Groq** — [console.groq.com/keys](https://console.groq.com/keys)
+  - **OpenRouter** — [openrouter.ai/keys](https://openrouter.ai/keys) (usa
+    los modelos con sufijo `:free`)
+
+  OpenAI y Anthropic también son compatibles, pero sus APIs cobran por uso
+  desde la primera llamada (no tienen tier gratis permanente como Gemini).
+  Con varios proveedores configurados, NEXA aprovecha todo el sistema de
+  enrutamiento y respaldo descrito arriba.
 
 ## Configuración
 
@@ -49,9 +63,11 @@ cp .env.example .env.local
 Completa las claves que tengas disponibles en `.env.local`:
 
 ```bash
+GOOGLE_GENERATIVE_AI_API_KEY=...
+GROQ_API_KEY=gsk_...
+OPENROUTER_API_KEY=sk-or-...
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
-GOOGLE_GENERATIVE_AI_API_KEY=...
 ```
 
 Las claves **solo** se usan en el servidor (rutas `route.ts` bajo
@@ -95,3 +111,14 @@ desplegar.
   (`OPENAI_IMAGE_MODEL`); para usar otro proveedor de imágenes, añade su
   cliente en `src/lib/nexa/models.ts` y una rama en
   `src/app/api/image/route.ts`.
+- Los IDs de modelo por defecto de Groq y OpenRouter (`GROQ_MODEL_*`,
+  `OPENROUTER_MODEL_*` en `.env.example`) no se pudieron probar en este
+  entorno por no tener clave propia de esos proveedores — verificalos contra
+  el catálogo vigente (`console.groq.com` / `openrouter.ai/models`) apenas
+  actives esas claves, igual que se ajustó antes con los modelos de Google.
+- Otros proveedores gratuitos/freemium (Mistral, Cloudflare Workers AI,
+  Cohere, Hugging Face Inference, SambaNova, NVIDIA API Catalog, Z.ai) no
+  están integrados todavía. Seguir el mismo patrón que Groq/OpenRouter en
+  `src/lib/nexa/models.ts` (agregar el paquete `@ai-sdk/*` o un cliente
+  OpenAI-compatible, el `ProviderId`, la entrada en `MODEL_IDS` y
+  `KEY_ENV_VAR`) alcanza para sumarlos.

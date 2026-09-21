@@ -5,6 +5,8 @@ const PROVIDER_STYLES: Record<ProviderId, string> = {
   openai: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
   anthropic: "bg-orange-500/15 text-orange-700 dark:text-orange-300",
   google: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
+  groq: "bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300",
+  openrouter: "bg-teal-500/15 text-teal-700 dark:text-teal-300",
 };
 
 export function AIMessage({

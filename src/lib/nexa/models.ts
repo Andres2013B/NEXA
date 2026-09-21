@@ -1,9 +1,11 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createGroq } from "@ai-sdk/groq";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import type { LanguageModel } from "ai";
 
-export type ProviderId = "openai" | "anthropic" | "google";
+export type ProviderId = "openai" | "anthropic" | "google" | "groq" | "openrouter";
 export type Tier = "fast" | "general" | "advanced";
 
 const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -11,6 +13,8 @@ const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const google = createGoogleGenerativeAI({
   apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
 });
+const groq = createGroq({ apiKey: process.env.GROQ_API_KEY });
+const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
 
 /**
  * IDs de modelo configurables por variable de entorno para que el
@@ -39,6 +43,23 @@ const MODEL_IDS: Record<ProviderId, Record<Tier, string>> = {
     general: process.env.GOOGLE_MODEL_GENERAL ?? "gemini-flash-lite-latest",
     advanced: process.env.GOOGLE_MODEL_ADVANCED ?? "gemini-flash-lite-latest",
   },
+  groq: {
+    // Modelos abiertos gratuitos de Groq (cuota generosa, inferencia muy
+    // rápida). Sin clave propia no pude probarlos en este entorno — si
+    // Groq retira/renombra alguno, ajustá las variables de entorno igual
+    // que se hizo acá arriba con los de Google.
+    fast: process.env.GROQ_MODEL_FAST ?? "llama-3.1-8b-instant",
+    general: process.env.GROQ_MODEL_GENERAL ?? "llama-3.3-70b-versatile",
+    advanced: process.env.GROQ_MODEL_ADVANCED ?? "llama-3.3-70b-versatile",
+  },
+  openrouter: {
+    // Modelos con sufijo ":free" para quedarse dentro del tier gratuito de
+    // OpenRouter. Tampoco los pude probar sin clave propia — revisá
+    // https://openrouter.ai/models?max_price=0 por el catálogo vigente.
+    fast: process.env.OPENROUTER_MODEL_FAST ?? "meta-llama/llama-3.2-3b-instruct:free",
+    general: process.env.OPENROUTER_MODEL_GENERAL ?? "meta-llama/llama-3.3-70b-instruct:free",
+    advanced: process.env.OPENROUTER_MODEL_ADVANCED ?? "meta-llama/llama-3.3-70b-instruct:free",
+  },
 };
 
 export const OPENAI_IMAGE_MODEL =
@@ -48,6 +69,8 @@ const KEY_ENV_VAR: Record<ProviderId, string | undefined> = {
   openai: process.env.OPENAI_API_KEY,
   anthropic: process.env.ANTHROPIC_API_KEY,
   google: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+  groq: process.env.GROQ_API_KEY,
+  openrouter: process.env.OPENROUTER_API_KEY,
 };
 
 export function isProviderConfigured(provider: ProviderId): boolean {
@@ -62,6 +85,10 @@ export function providerLabel(provider: ProviderId): string {
       return "Claude (Anthropic)";
     case "google":
       return "Gemini (Google)";
+    case "groq":
+      return "Groq";
+    case "openrouter":
+      return "OpenRouter";
   }
 }
 
@@ -74,6 +101,10 @@ export function resolveModel(provider: ProviderId, tier: Tier): LanguageModel {
       return anthropic(modelId);
     case "google":
       return google(modelId);
+    case "groq":
+      return groq(modelId);
+    case "openrouter":
+      return openrouter(modelId);
   }
 }
 

@@ -5,9 +5,11 @@ import type { ModelMode } from "@/lib/nexa/chat-types";
 
 const OPTIONS: { value: ModelMode; label: string }[] = [
   { value: "auto", label: "Auto" },
+  { value: "google", label: "Gemini" },
+  { value: "groq", label: "Groq" },
+  { value: "openrouter", label: "OpenRouter" },
   { value: "openai", label: "ChatGPT" },
   { value: "anthropic", label: "Claude" },
-  { value: "google", label: "Gemini" },
 ];
 
 export function ModelSelector({
@@ -30,7 +32,7 @@ export function ModelSelector({
     <div
       role="radiogroup"
       aria-label="Modelo de IA"
-      className="flex items-center gap-0.5 rounded-full bg-neutral-100 p-1 text-xs dark:bg-white/5"
+      className="flex flex-wrap items-center gap-0.5 rounded-2xl bg-neutral-100 p-1 text-xs dark:bg-white/5"
     >
       {OPTIONS.map((opt) => {
         const locked = opt.value !== "auto" && configured[opt.value] === false;
