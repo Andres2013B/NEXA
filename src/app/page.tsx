@@ -1,192 +1,104 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Composer } from "@/components/Composer";
-import { ChatMessageView } from "@/components/ChatMessageView";
-import { ModeSelector } from "@/components/ModeSelector";
-import type { ChatMessage, ModelMode } from "@/lib/nexa/chat-types";
-import type { ProviderId } from "@/lib/nexa/models";
+import { useState } from "react";
+import { FloatingAIButton } from "@/components/FloatingAIButton";
+import { AIChatPanel } from "@/components/AIChatPanel";
+import { useNexaChat } from "@/lib/nexa/useNexaChat";
+import type { Attachment } from "@/lib/nexa/chat-types";
 
-function id() {
-  return Math.random().toString(36).slice(2);
-}
+const SUGGESTIONS = [
+  "Escribe un correo profesional",
+  "Explícame un tema paso a paso",
+  "Ayúdame con un problema de matemáticas",
+  "Genera código para una función",
+];
 
 export default function Home() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [mode, setMode] = useState<ModelMode>("auto");
+  const [open, setOpen] = useState(false);
   const [isImageMode, setIsImageMode] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const {
+    conversations,
+    activeId,
+    messages,
+    isLoading,
+    send,
+    retry,
+    newConversation,
+    selectConversation,
+    deleteConversation,
+  } = useNexaChat();
 
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [messages]);
-
-  async function sendChat(text: string) {
-    const userMessage: ChatMessage = { id: id(), role: "user", content: text };
-    const assistantId = id();
-    const history = [...messages, userMessage];
-
-    setMessages([...history, { id: assistantId, role: "assistant", content: "" }]);
-    setIsLoading(true);
-
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode,
-          messages: history.map((m) => ({ role: m.role, content: m.content })),
-        }),
-      });
-
-      if (!res.ok || !res.body) {
-        const data = await res.json().catch(() => ({}));
-        const details = Array.isArray(data.details) ? data.details.join(" ") : undefined;
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId
-              ? {
-                  ...m,
-                  error: true,
-                  content: [
-                    data.error ??
-                      "No se pudo obtener respuesta. Verifica la configuración de las claves de API.",
-                    details,
-                  ]
-                    .filter(Boolean)
-                    .join("\n"),
-                }
-              : m,
-          ),
-        );
-        return;
-      }
-
-      const provider = res.headers.get("X-Nexa-Provider") as ProviderId | null;
-      const model = res.headers.get("X-Nexa-Model") ?? undefined;
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let content = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        content += decoder.decode(value, { stream: true });
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId
-              ? { ...m, content, provider: provider ?? undefined, model }
-              : m,
-          ),
-        );
-      }
-    } catch {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantId
-            ? { ...m, error: true, content: "Error de red al contactar a NEXA." }
-            : m,
-        ),
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  async function sendImage(prompt: string) {
-    const userMessage: ChatMessage = { id: id(), role: "user", content: prompt };
-    const assistantId = id();
-    setMessages((prev) => [
-      ...prev,
-      userMessage,
-      { id: assistantId, role: "assistant", content: "Generando imagen…" },
-    ]);
-    setIsLoading(true);
-
-    try {
-      const res = await fetch("/api/image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId
-              ? { ...m, error: true, content: data.error ?? "No se pudo generar la imagen." }
-              : m,
-          ),
-        );
-        return;
-      }
-
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantId
-            ? { ...m, content: "", image: data.image, provider: "openai" }
-            : m,
-        ),
-      );
-    } catch {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantId
-            ? { ...m, error: true, content: "Error de red al generar la imagen." }
-            : m,
-        ),
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  function handleSend(text: string) {
-    if (isImageMode) {
-      void sendImage(text);
-    } else {
-      void sendChat(text);
-    }
+  function openWith(text?: string) {
+    setOpen(true);
+    if (text) send(text, false);
   }
 
   return (
-    <div className="mx-auto flex h-dvh w-full max-w-3xl flex-col px-4">
-      <header className="flex items-center justify-between gap-3 py-4">
-        <div>
-          <h1 className="text-lg font-semibold">NEXA</h1>
-          <p className="text-xs text-neutral-500">
-            IA multimodelo — elige el mejor modelo automáticamente para cada tarea
+    <div className="relative min-h-dvh overflow-hidden bg-neutral-50 dark:bg-neutral-950">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_-10%,rgba(124,58,237,0.15),transparent_45%),radial-gradient(circle_at_100%_10%,rgba(79,70,229,0.12),transparent_40%)]"
+      />
+
+      <main className="relative mx-auto flex min-h-dvh w-full max-w-2xl flex-col items-center justify-center gap-8 px-6 py-16 text-center">
+        <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 text-3xl text-white shadow-lg shadow-violet-600/20">
+          ✦
+        </span>
+
+        <div className="space-y-3">
+          <h1 className="text-3xl font-semibold tracking-tight text-neutral-900 dark:text-white sm:text-4xl">
+            NEXA
+          </h1>
+          <p className="mx-auto max-w-md text-sm text-neutral-500 dark:text-neutral-400 sm:text-base">
+            IA multimodelo — combina ChatGPT, Claude y Gemini, y elige el mejor
+            modelo automáticamente para cada tarea.
           </p>
         </div>
-        <ModeSelector value={mode} onChange={setMode} />
-      </header>
 
-      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto py-4">
-        {messages.length === 0 && (
-          <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-neutral-400">
-            <p className="text-2xl">👋</p>
-            <p className="text-sm">
-              Pregúntame algo, pide un documento, código, una comparación o toca
-              🖼️ para generar una imagen.
-            </p>
-          </div>
-        )}
-        {messages.map((m) => (
-          <ChatMessageView key={m.id} message={m} />
-        ))}
-      </div>
+        <button
+          type="button"
+          onClick={() => openWith()}
+          className="rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 px-6 py-3 text-sm font-medium text-white shadow-lg shadow-violet-600/25 transition-transform hover:scale-[1.02] active:scale-95"
+        >
+          Iniciar conversación
+        </button>
 
-      <div className="pb-4">
-        <Composer
-          onSend={handleSend}
-          isLoading={isLoading}
-          isImageMode={isImageMode}
-          onToggleImageMode={() => setIsImageMode((v) => !v)}
+        <div className="flex flex-wrap justify-center gap-2">
+          {SUGGESTIONS.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => openWith(s)}
+              className="rounded-full border border-neutral-200 bg-white/70 px-3.5 py-1.5 text-xs text-neutral-600 backdrop-blur transition-colors hover:border-violet-300 hover:text-violet-700 dark:border-neutral-800 dark:bg-neutral-900/50 dark:text-neutral-300 dark:hover:border-violet-700 dark:hover:text-violet-300"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </main>
+
+      {!open && (
+        <FloatingAIButton
+          open={open}
+          onClick={() => setOpen(true)}
+          messageCount={messages.length}
         />
-      </div>
+      )}
+      <AIChatPanel
+        open={open}
+        onClose={() => setOpen(false)}
+        conversations={conversations}
+        activeId={activeId}
+        onSelectConversation={selectConversation}
+        onNewConversation={newConversation}
+        onDeleteConversation={deleteConversation}
+        messages={messages}
+        isLoading={isLoading}
+        isImageMode={isImageMode}
+        onToggleImageMode={() => setIsImageMode((v) => !v)}
+        onSend={(text, attachments: Attachment[]) => send(text, isImageMode, attachments)}
+        onRetry={retry}
+      />
     </div>
   );
 }
