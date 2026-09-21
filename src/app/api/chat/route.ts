@@ -157,6 +157,7 @@ export async function POST(req: Request) {
               "X-Nexa-Model": modelIdFor(synthesizer, decision.tier),
               "X-Nexa-Category": decision.category,
               "X-Nexa-Sources": answers.map((a) => a.provider).join(","),
+              "X-Nexa-Warnings": encodeURIComponent(JSON.stringify(errors)),
             },
           });
         }
@@ -190,6 +191,7 @@ export async function POST(req: Request) {
             "X-Nexa-Model": modelIdFor(synthesizer, decision.tier),
             "X-Nexa-Category": decision.category,
             "X-Nexa-Sources": answers.map((a) => a.provider).join(","),
+            "X-Nexa-Warnings": encodeURIComponent(JSON.stringify(errors)),
           },
         });
       } catch (err) {
@@ -197,6 +199,7 @@ export async function POST(req: Request) {
         // mandamos la mejor (la de mayor prioridad) en vez de un error duro.
         console.error("[nexa/chat] síntesis falló, devolviendo mejor respuesta cruda:", err);
         const best = answers[0];
+        const synthesisError = `Síntesis: ${err instanceof Error ? err.message : "error desconocido"}.`;
         return new Response(best.text, {
           headers: {
             "Content-Type": "text/plain; charset=utf-8",
@@ -204,6 +207,7 @@ export async function POST(req: Request) {
             "X-Nexa-Model": modelIdFor(best.provider, decision.tier),
             "X-Nexa-Category": decision.category,
             "X-Nexa-Sources": best.provider,
+            "X-Nexa-Warnings": encodeURIComponent(JSON.stringify([...errors, synthesisError])),
           },
         });
       }

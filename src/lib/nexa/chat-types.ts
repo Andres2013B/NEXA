@@ -22,6 +22,8 @@ export interface ChatMessage {
   category?: string;
   /** Proveedores que contribuyeron a esta respuesta en modo "consultar a todos". */
   sources?: ProviderId[];
+  /** Proveedores que fallaron en el intento "consultar a todos" (aunque la respuesta haya salido bien). */
+  warnings?: string[];
   error?: boolean;
   /** Imagen generada (resultado del modo "generar imagen"). */
   image?: string;

@@ -82,6 +82,19 @@ export function AIMessage({
           message.content || (message.role === "assistant" ? "…" : "")
         )}
 
+        {!isUser && message.warnings && message.warnings.length > 0 && (
+          <details className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
+            <summary className="cursor-pointer select-none">
+              ⚠ {message.warnings.length === 1 ? "1 proveedor no respondió" : `${message.warnings.length} proveedores no respondieron`}
+            </summary>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4 text-neutral-500 dark:text-neutral-400">
+              {message.warnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          </details>
+        )}
+
         {message.error && onRetry && (
           <button
             type="button"
