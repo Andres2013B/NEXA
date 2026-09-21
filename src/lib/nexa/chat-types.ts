@@ -11,6 +11,8 @@ export interface ChatMessage {
   category?: string;
   error?: boolean;
   image?: string;
+  /** Qué endpoint originó este turno, para poder reintentarlo correctamente. */
+  kind?: "chat" | "image";
 }
 
 export type ModelMode = ProviderId | "auto";
