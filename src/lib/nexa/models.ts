@@ -31,9 +31,9 @@ const MODEL_IDS: Record<ProviderId, Record<Tier, string>> = {
     advanced: process.env.ANTHROPIC_MODEL_ADVANCED ?? "claude-opus-4-1",
   },
   google: {
-    fast: process.env.GOOGLE_MODEL_FAST ?? "gemini-2.0-flash",
-    general: process.env.GOOGLE_MODEL_GENERAL ?? "gemini-2.0-flash",
-    advanced: process.env.GOOGLE_MODEL_ADVANCED ?? "gemini-1.5-pro",
+    fast: process.env.GOOGLE_MODEL_FAST ?? "gemini-flash-lite-latest",
+    general: process.env.GOOGLE_MODEL_GENERAL ?? "gemini-flash-latest",
+    advanced: process.env.GOOGLE_MODEL_ADVANCED ?? "gemini-pro-latest",
   },
 };
 
