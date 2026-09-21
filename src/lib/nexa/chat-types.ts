@@ -20,6 +20,8 @@ export interface ChatMessage {
   provider?: ImageProvider;
   model?: string;
   category?: string;
+  /** Proveedores que contribuyeron a esta respuesta en modo "consultar a todos". */
+  sources?: ProviderId[];
   error?: boolean;
   /** Imagen generada (resultado del modo "generar imagen"). */
   image?: string;

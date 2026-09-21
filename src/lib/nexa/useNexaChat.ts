@@ -161,6 +161,8 @@ export function useNexaChat() {
 
       const provider = res.headers.get("X-Nexa-Provider") as ProviderId | null;
       const model = res.headers.get("X-Nexa-Model") ?? undefined;
+      const sourcesHeader = res.headers.get("X-Nexa-Sources");
+      const sources = sourcesHeader ? (sourcesHeader.split(",") as ProviderId[]) : undefined;
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -173,7 +175,9 @@ export function useNexaChat() {
         patchConversation(convId, (c) => ({
           ...c,
           messages: c.messages.map((m) =>
-            m.id === assistantId ? { ...m, content, provider: provider ?? undefined, model } : m,
+            m.id === assistantId
+              ? { ...m, content, provider: provider ?? undefined, model, sources }
+              : m,
           ),
         }));
       }

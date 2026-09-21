@@ -34,7 +34,25 @@ export function AIMessage({
               : "bg-white text-neutral-900 ring-1 ring-neutral-100 dark:bg-neutral-800/80 dark:text-neutral-100 dark:ring-neutral-700/50"
         }`}
       >
-        {!isUser && message.provider && (
+        {!isUser && message.sources && message.sources.length > 1 && (
+          <div className="mb-1.5 flex flex-wrap items-center gap-1">
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-violet-500/15 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300"
+              title="NEXA combinó las respuestas de estos modelos en una sola"
+            >
+              ✦ Combinado
+            </span>
+            {message.sources.map((s) => (
+              <span
+                key={s}
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${PROVIDER_STYLES[s]}`}
+              >
+                {providerLabel(s)}
+              </span>
+            ))}
+          </div>
+        )}
+        {!isUser && message.provider && (!message.sources || message.sources.length <= 1) && (
           <span
             className={`mb-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${PROVIDER_STYLES[message.provider]}`}
             title={message.model}
