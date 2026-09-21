@@ -54,12 +54,15 @@ const MODEL_IDS: Record<ProviderId, Record<Tier, string>> = {
     advanced: process.env.GROQ_MODEL_ADVANCED ?? "openai/gpt-oss-120b",
   },
   openrouter: {
-    // Modelos con sufijo ":free" para quedarse dentro del tier gratuito de
-    // OpenRouter. Tampoco los pude probar sin clave propia — revisá
-    // https://openrouter.ai/models?max_price=0 por el catálogo vigente.
-    fast: process.env.OPENROUTER_MODEL_FAST ?? "meta-llama/llama-3.2-3b-instruct:free",
-    general: process.env.OPENROUTER_MODEL_GENERAL ?? "meta-llama/llama-3.3-70b-instruct:free",
-    advanced: process.env.OPENROUTER_MODEL_ADVANCED ?? "meta-llama/llama-3.3-70b-instruct:free",
+    // meta-llama/llama-3.2-3b-instruct:free dejó de estar disponible gratis
+    // (la propia API lo confirmó). Ambos slugs de abajo están verificados
+    // 1:1 en sus páginas de detalle en openrouter.ai (precio $0 input y
+    // output, buen uptime):
+    // - inclusionai/ling-3.0-flash-vl:free — 62 tps, 2.25s latencia, 100% uptime
+    // - nex-agi/nex-n2.5-pro:free — 46 tps, 1.42s latencia, 99.70% uptime
+    fast: process.env.OPENROUTER_MODEL_FAST ?? "inclusionai/ling-3.0-flash-vl:free",
+    general: process.env.OPENROUTER_MODEL_GENERAL ?? "nex-agi/nex-n2.5-pro:free",
+    advanced: process.env.OPENROUTER_MODEL_ADVANCED ?? "nex-agi/nex-n2.5-pro:free",
   },
 };
 
