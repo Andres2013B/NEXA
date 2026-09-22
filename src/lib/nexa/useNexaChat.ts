@@ -28,6 +28,27 @@ function loadConversations(): Conversation[] {
   }
 }
 
+/**
+ * Versión liviana para guardar en localStorage: sin los datos base64 de
+ * imágenes/adjuntos. Una sola imagen generada o subida puede pesar 1-2MB, y
+ * la cuota típica de localStorage es de solo 5-10MB (menos todavía en
+ * Safari) — sin esto, unas pocas imágenes la agotan y el guardado entero
+ * empieza a fallar en silencio (el catch de abajo no avisa a nadie). El
+ * texto del chat es lo que importa persistir; las imágenes se pierden al
+ * recargar, pero el historial no.
+ */
+function stripHeavyData(conversations: Conversation[]): Conversation[] {
+  return conversations.map((c) => ({
+    ...c,
+    messages: c.messages.map((m) => {
+      if (!m.image && !m.attachments) return m;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- se destructuran para excluirlos del resto
+      const { image, attachments, ...rest } = m;
+      return rest;
+    }),
+  }));
+}
+
 /** Convierte un ChatMessage a la forma que espera /api/chat (texto o texto+imágenes). */
 function toWireMessage(m: ChatMessage) {
   if (!m.attachments?.length) {
@@ -67,10 +88,19 @@ export function useNexaChat() {
 
   useEffect(() => {
     if (!hydrated.current) return;
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
-    } catch {
-      // localStorage puede fallar (modo privado, cuota llena); no es crítico.
+    let toSave = stripHeavyData(conversations);
+    for (;;) {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+        return;
+      } catch {
+        // Cuota llena incluso sin imágenes (historial muy largo, modo
+        // privado con cuota mínima, etc.): descarta la conversación más
+        // vieja (van al final del array) y reintenta, en vez de perder todo
+        // el guardado en silencio.
+        if (toSave.length === 0) return;
+        toSave = toSave.slice(0, -1);
+      }
     }
   }, [conversations]);
 
