@@ -16,6 +16,14 @@ export const metadata: Metadata = {
   title: "NEXA — IA multimodelo",
   description:
     "Asistente personal, académico, creativo y productivo que combina ChatGPT, Claude y Gemini.",
+  // Permite "instalarla" en iOS (Compartir → Agregar a inicio) con ícono y
+  // ventana propios en vez de abrir Safari; en Chrome/Edge de escritorio el
+  // ícono de instalar sale solo a partir del manifest (ver manifest.ts).
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "NEXA",
+  },
 };
 
 export const viewport: Viewport = {
@@ -26,6 +34,7 @@ export const viewport: Viewport = {
   // cortado detrás del teclado. Con "resizes-content" el layout se
   // recalcula igual que en Chrome/Android.
   interactiveWidget: "resizes-content",
+  themeColor: "#7c3aed",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
