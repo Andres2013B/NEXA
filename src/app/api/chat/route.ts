@@ -18,8 +18,9 @@ export const maxDuration = 60;
 // todos": el plan Hobby de Vercel mata la función entera a los 10s, así que
 // hay que dejar margen para la síntesis final. Si esto empieza a cortarse
 // seguido en producción, el problema es este límite (o el plan de Vercel),
-// no el código.
-const ENSEMBLE_PROVIDER_TIMEOUT_MS = 7_000;
+// no el código — la única forma de darle más margen real a la comparación
+// entre proveedores es pasar a un plan de Vercel sin el límite de 10s.
+const ENSEMBLE_PROVIDER_TIMEOUT_MS = 7_500;
 // Si la búsqueda web se cuelga (en vez de fallar rápido), cuánto esperar
 // antes de cortarla y reintentar sin buscar — con margen real bajo los 10s
 // duros del plan Hobby.
@@ -35,7 +36,7 @@ const PROVIDER_ATTEMPT_TIMEOUT_MS = 8_000;
 // podría llegar a 15s — muy por encima del límite duro de 10s de Vercel
 // Hobby. El proveedor sintetizador ya demostró responder rápido durante el
 // gather, así que le alcanza un margen bastante más chico.
-const SYNTHESIS_ATTEMPT_TIMEOUT_MS = 2_500;
+const SYNTHESIS_ATTEMPT_TIMEOUT_MS = 2_000;
 
 interface ChatRequestBody {
   messages: ModelMessage[];
@@ -59,11 +60,12 @@ async function attemptOnce(
     // extra); solo Google está implementado/probado por ahora — ver
     // getSearchTools en models.ts.
     tools: useSearch ? getSearchTools(provider) : undefined,
-    // Sin esto, un 429 real (ej. grounding sin billing habilitado) se
-    // reintenta solo con backoff antes de fallar — convierte un fallo
-    // rápido en varios segundos perdidos antes de poder caer al fallback
-    // sin búsqueda.
-    maxRetries: useSearch ? 0 : undefined,
+    // Sin esto, un 429/503 real se reintenta solo con backoff (2 intentos
+    // por default del SDK) antes de fallar — eso solo puede comerse el
+    // presupuesto de tiempo, ya bastante ajustado, sin ganar nada: nuestros
+    // propios reintentos (sin búsqueda, siguiente proveedor de la cadena)
+    // ya cumplen ese rol de forma más rápida.
+    maxRetries: 0,
     abortSignal: signal,
     // Cuando falla la llamada al proveedor (ej. 503 "high demand") antes de
     // emitir contenido, textStream termina vacío en vez de rechazar la
@@ -167,10 +169,10 @@ async function queryOnce(
     system: NEXA_SYSTEM_PROMPT,
     messages,
     tools: useSearch ? getSearchTools(provider) : undefined,
-    // Igual que en attemptOnce: sin esto, un 429 real se reintenta solo con
-    // backoff antes de fallar, comiéndose presupuesto de tiempo compartido
-    // con el reintento sin búsqueda en queryOne.
-    maxRetries: useSearch ? 0 : undefined,
+    // Igual que en attemptOnce: un 429/503 con reintento-y-backoff del SDK
+    // se come el presupuesto compartido de queryOne sin ganar nada frente a
+    // fallar rápido y (si aplica) reintentar sin búsqueda nosotros mismos.
+    maxRetries: 0,
     abortSignal: signal,
   });
   return { provider, text };
