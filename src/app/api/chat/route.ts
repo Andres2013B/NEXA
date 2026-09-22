@@ -29,6 +29,13 @@ const SEARCH_ATTEMPT_TIMEOUT_MS = 5_000;
 // demanda") bloquea toda la función hasta que Vercel la mata a los 10s, en
 // vez de dejar que la cadena pase al siguiente proveedor.
 const PROVIDER_ATTEMPT_TIMEOUT_MS = 8_000;
+// La síntesis del modo "consultar a todos" corre DESPUÉS de gatherAnswers,
+// que ya se pudo haber comido hasta ENSEMBLE_PROVIDER_TIMEOUT_MS (7s). Si la
+// síntesis usara el mismo presupuesto que un intento normal (8s), el total
+// podría llegar a 15s — muy por encima del límite duro de 10s de Vercel
+// Hobby. El proveedor sintetizador ya demostró responder rápido durante el
+// gather, así que le alcanza un margen bastante más chico.
+const SYNTHESIS_ATTEMPT_TIMEOUT_MS = 2_500;
 
 interface ChatRequestBody {
   messages: ModelMessage[];
@@ -80,40 +87,62 @@ async function attemptOnce(
   return { reader, first };
 }
 
+/** Si el AbortController disparó por nuestro propio timeout (no por otra
+ * causa), reemplaza el "AbortError" crudo del SDK (en inglés, poco claro
+ * para mostrar en la burbuja) por un mensaje entendible. */
+function rethrowClear(err: unknown, signal: AbortSignal): never {
+  if (signal.aborted) {
+    // Sin punto final: el call site (errors.push) ya le agrega uno.
+    throw new Error("Tardó demasiado en responder");
+  }
+  throw err instanceof Error ? err : new Error(String(err));
+}
+
 /**
  * Intenta iniciar el stream con un proveedor. Lee el primer chunk para
  * detectar errores de autenticación/config antes de comprometernos a
  * responder con este proveedor, y así poder pasar al siguiente de la
  * cadena de respaldo (sección 27 del sistema NEXA).
+ *
+ * `timeoutMs` es overrideable porque este mismo helper se usa tanto para un
+ * intento "de cero" (todo el presupuesto disponible) como para la síntesis
+ * del modo ensemble, que corre después de gatherAnswers y ya se comió parte
+ * del tiempo — ver SYNTHESIS_ATTEMPT_TIMEOUT_MS.
  */
-async function attempt(provider: ProviderId, tier: Tier, messages: ModelMessage[], useSearch: boolean) {
-  if (!useSearch) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), PROVIDER_ATTEMPT_TIMEOUT_MS);
-    try {
-      return await attemptOnce(provider, tier, messages, false, controller.signal);
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-  // La búsqueda web puede fallar (o directamente colgarse) por falta de
-  // acceso/facturación aunque el modelo en sí funcione bien (ej. Google
-  // Search grounding devuelve 429 en cuentas sin billing habilitado);
-  // reintentamos una vez sin buscar en vez de dar por perdido el proveedor.
-  // Un mismo presupuesto de tiempo para los dos intentos (igual que en
-  // queryOne): si el reintento sin búsqueda tuviera su propio timeout
-  // aparte, un proveedor con la llamada colgada (ej. Google "alta demanda")
-  // podría tardar el doble de lo pensado y comerse el límite duro de 10s de
-  // Vercel Hobby.
+async function attempt(
+  provider: ProviderId,
+  tier: Tier,
+  messages: ModelMessage[],
+  useSearch: boolean,
+  timeoutMs: number = useSearch ? SEARCH_ATTEMPT_TIMEOUT_MS : PROVIDER_ATTEMPT_TIMEOUT_MS,
+) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), SEARCH_ATTEMPT_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
+    if (!useSearch) {
+      try {
+        return await attemptOnce(provider, tier, messages, false, controller.signal);
+      } catch (err) {
+        rethrowClear(err, controller.signal);
+      }
+    }
+    // La búsqueda web puede fallar (o directamente colgarse) por falta de
+    // acceso/facturación aunque el modelo en sí funcione bien (ej. Google
+    // Search grounding devuelve 429 en cuentas sin billing habilitado);
+    // reintentamos una vez sin buscar en vez de dar por perdido el
+    // proveedor. Un mismo presupuesto de tiempo para los dos intentos: si el
+    // reintento sin búsqueda tuviera su propio timeout aparte, un proveedor
+    // con la llamada colgada podría tardar el doble de lo pensado.
     try {
       return await attemptOnce(provider, tier, messages, true, controller.signal);
     } catch (err) {
-      if (controller.signal.aborted) throw err;
+      if (controller.signal.aborted) rethrowClear(err, controller.signal);
       console.error(`[nexa/chat] ${provider} falló con búsqueda web, reintentando sin ella:`, err);
-      return await attemptOnce(provider, tier, messages, false, controller.signal);
+      try {
+        return await attemptOnce(provider, tier, messages, false, controller.signal);
+      } catch (err2) {
+        rethrowClear(err2, controller.signal);
+      }
     }
   } finally {
     clearTimeout(timer);
@@ -163,9 +192,13 @@ async function queryOne(
     try {
       return await queryOnce(provider, tier, messages, useSearch, controller.signal);
     } catch (err) {
-      if (!useSearch || controller.signal.aborted) throw err;
+      if (!useSearch || controller.signal.aborted) rethrowClear(err, controller.signal);
       console.error(`[nexa/chat] ${provider} falló con búsqueda web en el ensemble, reintentando sin ella:`, err);
-      return await queryOnce(provider, tier, messages, false, controller.signal);
+      try {
+        return await queryOnce(provider, tier, messages, false, controller.signal);
+      } catch (err2) {
+        rethrowClear(err2, controller.signal);
+      }
     }
   } finally {
     clearTimeout(timer);
@@ -269,8 +302,17 @@ export async function POST(req: Request) {
 
         const synthesisMessages = buildSynthesisMessages(messages, lastUserText, answers);
         // La síntesis solo combina texto ya investigado por el gather; no
-        // necesita volver a buscar en internet.
-        const { reader, first } = await attempt(synthesizer, decision.tier, synthesisMessages, false);
+        // necesita volver a buscar en internet. Presupuesto de tiempo más
+        // chico que un intento normal porque corre después del gather, que
+        // ya se pudo haber comido varios segundos — ver
+        // SYNTHESIS_ATTEMPT_TIMEOUT_MS.
+        const { reader, first } = await attempt(
+          synthesizer,
+          decision.tier,
+          synthesisMessages,
+          false,
+          SYNTHESIS_ATTEMPT_TIMEOUT_MS,
+        );
 
         const bytes = new ReadableStream<Uint8Array>({
           async start(controller) {
