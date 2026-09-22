@@ -3,7 +3,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createGroq } from "@ai-sdk/groq";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import type { LanguageModel } from "ai";
+import type { LanguageModel, ToolSet } from "ai";
 
 export type ProviderId = "openai" | "anthropic" | "google" | "groq" | "openrouter";
 export type Tier = "fast" | "general" | "advanced";
@@ -114,6 +114,21 @@ export function resolveModel(provider: ProviderId, tier: Tier): LanguageModel {
 
 export function modelIdFor(provider: ProviderId, tier: Tier): string {
   return MODEL_IDS[provider][tier];
+}
+
+/**
+ * Herramientas de búsqueda web nativa por proveedor (ejecutadas del lado
+ * del proveedor, no requieren un segundo round-trip). Google es el único
+ * probado de verdad en este entorno (es el único con salida a internet
+ * desde el sandbox de desarrollo); los demás quedan sin implementar hasta
+ * poder verificarlos con una clave real, en vez de adivinar el nombre de
+ * la tool y romper algo en producción.
+ */
+export function getSearchTools(provider: ProviderId): ToolSet | undefined {
+  if (provider === "google") {
+    return { google_search: google.tools.googleSearch({}) };
+  }
+  return undefined;
 }
 
 export { openai };

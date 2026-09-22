@@ -2,6 +2,7 @@ import { generateText, streamText, type ModelMessage } from "ai";
 import { NEXA_SYSTEM_PROMPT } from "@/lib/nexa/system-prompt";
 import { route, type ForcedProvider } from "@/lib/nexa/router";
 import {
+  getSearchTools,
   isProviderConfigured,
   modelIdFor,
   providerLabel,
@@ -19,25 +20,44 @@ export const maxDuration = 60;
 // seguido en producción, el problema es este límite (o el plan de Vercel),
 // no el código.
 const ENSEMBLE_PROVIDER_TIMEOUT_MS = 7_000;
+// Si la búsqueda web se cuelga (en vez de fallar rápido), cuánto esperar
+// antes de cortarla y reintentar sin buscar — con margen real bajo los 10s
+// duros del plan Hobby.
+const SEARCH_ATTEMPT_TIMEOUT_MS = 5_000;
+// Límite para un intento normal (sin búsqueda) en la cadena de respaldo de
+// un solo proveedor. Sin esto, un proveedor colgado (ej. Google en "alta
+// demanda") bloquea toda la función hasta que Vercel la mata a los 10s, en
+// vez de dejar que la cadena pase al siguiente proveedor.
+const PROVIDER_ATTEMPT_TIMEOUT_MS = 8_000;
 
 interface ChatRequestBody {
   messages: ModelMessage[];
   mode?: ForcedProvider;
 }
 
-/**
- * Intenta iniciar el stream con un proveedor. Lee el primer chunk para
- * detectar errores de autenticación/config antes de comprometernos a
- * responder con este proveedor, y así poder pasar al siguiente de la
- * cadena de respaldo (sección 27 del sistema NEXA).
- */
-async function attempt(provider: ProviderId, tier: Tier, messages: ModelMessage[]) {
+async function attemptOnce(
+  provider: ProviderId,
+  tier: Tier,
+  messages: ModelMessage[],
+  useSearch: boolean,
+  signal?: AbortSignal,
+) {
   const model = resolveModel(provider, tier);
   let streamError: unknown;
   const result = streamText({
     model,
     system: NEXA_SYSTEM_PROMPT,
     messages,
+    // Búsqueda web nativa del proveedor (ejecutada de su lado, sin round-trip
+    // extra); solo Google está implementado/probado por ahora — ver
+    // getSearchTools en models.ts.
+    tools: useSearch ? getSearchTools(provider) : undefined,
+    // Sin esto, un 429 real (ej. grounding sin billing habilitado) se
+    // reintenta solo con backoff antes de fallar — convierte un fallo
+    // rápido en varios segundos perdidos antes de poder caer al fallback
+    // sin búsqueda.
+    maxRetries: useSearch ? 0 : undefined,
+    abortSignal: signal,
     // Cuando falla la llamada al proveedor (ej. 503 "high demand") antes de
     // emitir contenido, textStream termina vacío en vez de rechazar la
     // promesa de lectura; capturamos el error acá para poder detectarlo y
@@ -49,10 +69,55 @@ async function attempt(provider: ProviderId, tier: Tier, messages: ModelMessage[
   });
   const reader = result.textStream.getReader();
   const first = await reader.read();
-  if (first.done && !first.value && streamError) {
-    throw streamError;
+  if (first.done && !first.value) {
+    // Un stream vacío nunca es una respuesta útil, tenga o no un error
+    // explícito adjunto (ej. con la búsqueda web activada, un tool call
+    // fallido puede dejar al modelo sin texto que emitir sin marcar
+    // streamError). Tratarlo siempre como falla para que dispare el
+    // fallback correspondiente en vez de devolver 200 con el cuerpo vacío.
+    throw streamError ?? new Error("Respuesta vacía del proveedor.");
   }
   return { reader, first };
+}
+
+/**
+ * Intenta iniciar el stream con un proveedor. Lee el primer chunk para
+ * detectar errores de autenticación/config antes de comprometernos a
+ * responder con este proveedor, y así poder pasar al siguiente de la
+ * cadena de respaldo (sección 27 del sistema NEXA).
+ */
+async function attempt(provider: ProviderId, tier: Tier, messages: ModelMessage[], useSearch: boolean) {
+  if (!useSearch) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), PROVIDER_ATTEMPT_TIMEOUT_MS);
+    try {
+      return await attemptOnce(provider, tier, messages, false, controller.signal);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  // La búsqueda web puede fallar (o directamente colgarse) por falta de
+  // acceso/facturación aunque el modelo en sí funcione bien (ej. Google
+  // Search grounding devuelve 429 en cuentas sin billing habilitado);
+  // reintentamos una vez sin buscar en vez de dar por perdido el proveedor.
+  // Un mismo presupuesto de tiempo para los dos intentos (igual que en
+  // queryOne): si el reintento sin búsqueda tuviera su propio timeout
+  // aparte, un proveedor con la llamada colgada (ej. Google "alta demanda")
+  // podría tardar el doble de lo pensado y comerse el límite duro de 10s de
+  // Vercel Hobby.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SEARCH_ATTEMPT_TIMEOUT_MS);
+  try {
+    try {
+      return await attemptOnce(provider, tier, messages, true, controller.signal);
+    } catch (err) {
+      if (controller.signal.aborted) throw err;
+      console.error(`[nexa/chat] ${provider} falló con búsqueda web, reintentando sin ella:`, err);
+      return await attemptOnce(provider, tier, messages, false, controller.signal);
+    }
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 interface EnsembleAnswer {
@@ -60,20 +125,56 @@ interface EnsembleAnswer {
   text: string;
 }
 
-async function queryOne(provider: ProviderId, tier: Tier, messages: ModelMessage[]): Promise<EnsembleAnswer> {
+async function queryOnce(
+  provider: ProviderId,
+  tier: Tier,
+  messages: ModelMessage[],
+  useSearch: boolean,
+  signal: AbortSignal,
+): Promise<EnsembleAnswer> {
   const model = resolveModel(provider, tier);
   const { text } = await generateText({
     model,
     system: NEXA_SYSTEM_PROMPT,
     messages,
-    abortSignal: AbortSignal.timeout(ENSEMBLE_PROVIDER_TIMEOUT_MS),
+    tools: useSearch ? getSearchTools(provider) : undefined,
+    // Igual que en attemptOnce: sin esto, un 429 real se reintenta solo con
+    // backoff antes de fallar, comiéndose presupuesto de tiempo compartido
+    // con el reintento sin búsqueda en queryOne.
+    maxRetries: useSearch ? 0 : undefined,
+    abortSignal: signal,
   });
   return { provider, text };
 }
 
+async function queryOne(
+  provider: ProviderId,
+  tier: Tier,
+  messages: ModelMessage[],
+  useSearch: boolean,
+): Promise<EnsembleAnswer> {
+  // Un mismo presupuesto de tiempo para los dos intentos (no uno detrás del
+  // otro): si el reintento sin búsqueda sumara su propio timeout aparte,
+  // un proveedor con la búsqueda colgada podría tardar el doble del límite
+  // pensado — inaceptable con los 10s duros del plan Hobby de Vercel.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ENSEMBLE_PROVIDER_TIMEOUT_MS);
+  try {
+    try {
+      return await queryOnce(provider, tier, messages, useSearch, controller.signal);
+    } catch (err) {
+      if (!useSearch || controller.signal.aborted) throw err;
+      console.error(`[nexa/chat] ${provider} falló con búsqueda web en el ensemble, reintentando sin ella:`, err);
+      return await queryOnce(provider, tier, messages, false, controller.signal);
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Le pregunta lo mismo a todos los proveedores configurados, en paralelo. */
-async function gatherAnswers(chain: ProviderId[], tier: Tier, messages: ModelMessage[]) {
-  const settled = await Promise.allSettled(chain.map((p) => queryOne(p, tier, messages)));
+async function gatherAnswers(chain: ProviderId[], tier: Tier, messages: ModelMessage[], useSearch: boolean) {
+  const settled = await Promise.allSettled(chain.map((p) => queryOne(p, tier, messages, useSearch)));
   const answers: EnsembleAnswer[] = [];
   const errors: string[] = [];
   settled.forEach((result, i) => {
@@ -122,6 +223,10 @@ export async function POST(req: Request) {
           .join(" ");
 
   const decision = route(lastUserText, mode);
+  // Búsqueda web solo para la categoría "investigacion" detectada por el
+  // router (preguntas por noticias/actualidad/"busca esto"): habilitarla
+  // siempre agregaría latencia a cada mensaje sin necesidad.
+  const useSearch = decision.category === "investigacion";
 
   const configuredChain = decision.chain.filter(isProviderConfigured);
   const chainToTry = configuredChain.length > 0 ? configuredChain : decision.chain;
@@ -133,7 +238,7 @@ export async function POST(req: Request) {
   // dos o más proveedores configurados. Con uno solo (el caso de hoy, con
   // solo Gemini activo) se comporta exactamente igual que antes.
   if (mode === "auto" && configuredChain.length >= 2) {
-    const { answers, errors: gatherErrors } = await gatherAnswers(configuredChain, decision.tier, messages);
+    const { answers, errors: gatherErrors } = await gatherAnswers(configuredChain, decision.tier, messages, useSearch);
     errors.push(...gatherErrors);
 
     if (answers.length > 0) {
@@ -163,7 +268,9 @@ export async function POST(req: Request) {
         }
 
         const synthesisMessages = buildSynthesisMessages(messages, lastUserText, answers);
-        const { reader, first } = await attempt(synthesizer, decision.tier, synthesisMessages);
+        // La síntesis solo combina texto ya investigado por el gather; no
+        // necesita volver a buscar en internet.
+        const { reader, first } = await attempt(synthesizer, decision.tier, synthesisMessages, false);
 
         const bytes = new ReadableStream<Uint8Array>({
           async start(controller) {
@@ -221,7 +328,7 @@ export async function POST(req: Request) {
         continue;
       }
       try {
-        const { reader, first } = await attempt(provider, decision.tier, messages);
+        const { reader, first } = await attempt(provider, decision.tier, messages, useSearch);
         const encoder = new TextEncoder();
 
         const bytes = new ReadableStream<Uint8Array>({
